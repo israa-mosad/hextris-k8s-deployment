@@ -9,18 +9,28 @@ This project demonstrates how to deploy the **Hextris web game** on a **Kubernet
 ```
 
 hextris-k8s-deployment/
+│
+├── app/
+│ ├── index.html
+│ ├── js/
+│ ├── style/
+│ ├── images/
+│ ├── vendor/
+│ ├── favicon.ico
+│ └── manifest.webmanifest
+│
 ├── Dockerfile
 ├── helm-chart/
-│   ├── Chart.yaml
-│   ├── values.yaml
-│   └── templates/
-│       ├── deployment.yaml
-│       ├── service.yaml
-│       └── ingress.yaml
+│ ├── Chart.yaml
+│ ├── values.yaml
+│ └── templates/
+│ ├── deployment.yaml
+│ ├── service.yaml
+│ └── ingress.yaml
 ├── terraform/
-│   └── main.tf
+│ └── main.tf
 ├── jenkins/
-│   └── Jenkinsfile
+│ └── Jenkinsfile
 └── README.md
 
 ````
