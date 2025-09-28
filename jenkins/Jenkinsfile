@@ -1,6 +1,8 @@
 pipeline {
     agent {
         kubernetes {
+            label 'hextris-agent'
+            defaultContainer 'kubectl'
             yaml """
 apiVersion: v1
 kind: Pod
@@ -14,12 +16,8 @@ spec:
 """
         }
     }
+
     stages {
-        stage('Build Docker Image') {
-            steps {
-                sh 'docker build -t israa/hextris:latest .'
-            }
-        }
         stage('Deploy with Helm') {
             steps {
                 sh 'helm upgrade --install hextris ./helm-chart --namespace hextris --create-namespace'
