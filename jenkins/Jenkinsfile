@@ -1,26 +1,32 @@
-pipeline {
-    agent {
-        kubernetes {
-            label 'hextris-agent'
-            defaultContainer 'kubectl'
-            yaml """
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-  - name: kubectl
-    image: israa2000/jenkins-agent-kubectl-helm:latest
-    command:
-    - cat
-    tty: true
-"""
+podTemplate(
+    label: 'hextris-agent',
+    serviceAccount: 'default',
+    containers: [
+        containerTemplate(
+            name: 'kubectl',
+            image: 'israa2000/jenkins-agent-kubectl-helm:latest',
+            command: 'cat',
+            ttyEnabled: true
+        )
+    ]
+) {
+    node('hextris-agent') {
+        stage('Checkout') {
+            checkout scm
         }
-    }
 
-    stages {
         stage('Deploy with Helm') {
-            steps {
-                sh 'helm upgrade --install hextris ./helm-chart --namespace hextris --create-namespace'
+            container('kubectl') {
+                // setup kubeconfig so kubectl/helm can talk to the cluster
+                kubeconfig(
+                    serverUrl: 'https://kubernetes.default.svc',
+                    credentialsId: 'k8s-credentials'
+                ) {
+                    sh '''
+                        helm upgrade --install hextris ./helm-chart \
+                          --namespace hextris --create-namespace
+                    '''
+                }
             }
         }
     }
