@@ -12,6 +12,7 @@ spec:
     command:
     - cat
     tty: true
+    imagePullPolicy: "Always"
 """
             defaultContainer 'devops-tools' // Use a clear container name
         }
