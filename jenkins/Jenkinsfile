@@ -17,16 +17,10 @@ podTemplate(
 
         stage('Deploy with Helm') {
             container('kubectl') {
-                // setup kubeconfig so kubectl/helm can talk to the cluster
-                kubeconfig(
-                    serverUrl: 'https://kubernetes.default.svc',
-                    credentialsId: 'k8s-credentials'
-                ) {
-                    sh '''
-                        helm upgrade --install hextris ./helm-chart \
-                          --namespace hextris --create-namespace
-                    '''
-                }
+                sh '''
+                    helm upgrade --install hextris ./helm-chart \
+                      --namespace hextris --create-namespace
+                '''
             }
         }
     }
