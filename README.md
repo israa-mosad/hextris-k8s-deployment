@@ -45,7 +45,7 @@ You’ll need to have these installed locally:
 ### Dockerfile
 ```dockerfile
 FROM nginx:alpine
-COPY app/ /usr/share/nginx/html
+COPY . /usr/share/nginx/html
 EXPOSE 80
 ````
 
