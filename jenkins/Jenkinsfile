@@ -16,11 +16,6 @@ spec:
         }
     }
     stages {
-        stage('Checkout') {
-            steps {
-                git 'https://github.com/israa-mosad/hextris-k8s-deployment'
-            }
-        }
         stage('Deploy with Helm') {
             steps {
                 container('kubectl') {
