@@ -1,7 +1,17 @@
 pipeline {
     agent {
         kubernetes {
-            yamlFile 'jenkins/agent.yaml'
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kubectl
+    image: israa2000/jenkins-agent-kubectl-helm:latest
+    command:
+    - cat
+    tty: true
+"""
             defaultContainer 'kubectl'
         }
     }
