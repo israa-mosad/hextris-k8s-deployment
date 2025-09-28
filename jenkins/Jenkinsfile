@@ -9,7 +9,7 @@ kind: Pod
 spec:
   containers:
   - name: kubectl
-    image: lachlanevenson/k8s-kubectl:latest
+    image: israa2000/jenkins-agent-kubectl-helm:latest
     command:
     - cat
     tty: true
