@@ -19,15 +19,17 @@ spec:
         stage('Deploy with Helm') {
             steps {
                 container('kubectl') {
-                    sh '''
-                        helm upgrade --install hextris ./helm-chart \
-                          --namespace hextris \
-                          --create-namespace \
-                          --history-max 5 \
-                          --storage-driver configmaps
-                    '''
+                    script {
+                        sh '''
+                          set -e
+                          echo "Starting Helm deployment..."
+                          helm upgrade --install hextris ./helm-chart --namespace hextris --create-namespace || {
+                              echo "❌ Helm failed: likely due to missing RBAC permissions on secrets in namespace 'hextris'."
+                              exit 1
+                          }
+                        '''
+                    }
                 }
             }
-        }
     }
 }
