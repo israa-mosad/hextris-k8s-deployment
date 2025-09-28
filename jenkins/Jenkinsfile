@@ -1,4 +1,3 @@
-```groovy
 podTemplate(
   label: 'hextris-agent',
   serviceAccount: 'jenkins-sa',
