@@ -19,7 +19,13 @@ spec:
         stage('Deploy with Helm') {
             steps {
                 container('kubectl') {
-                    sh 'helm upgrade --install hextris ./helm-chart --namespace hextris --create-namespace'
+                    sh '''
+                        helm upgrade --install hextris ./helm-chart \
+                          --namespace hextris \
+                          --create-namespace \
+                          --history-max 5 \
+                          --storage-driver configmaps
+                    '''
                 }
             }
         }
