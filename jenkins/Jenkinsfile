@@ -6,29 +6,54 @@ apiVersion: v1
 kind: Pod
 spec:
   containers:
-  - name: kubectl
-    image: israa2000/jenkins-agent-kubectl-helm:latest
+  - name: devops-tools
+    // IMPORTANT: This image MUST contain 'kubectl', 'helm', AND 'terraform'
+    image: israa2000/jenkins-agent-kubectl-helm:latest 
     command:
     - cat
     tty: true
 """
-            defaultContainer 'kubectl'
+            defaultContainer 'devops-tools' // Use a clear container name
         }
     }
+    
+    // Set environment variables for the application image that was pre-pushed
+    environment {
+        // Since you pre-pushed, we'll hardcode the known image and tag
+        IMAGE_REPO = "israa2000/hextris" 
+        IMAGE_TAG = "latest" 
+    }
+
     stages {
-        stage('Deploy with Helm') {
+        stage('Deploy with Terraform') {
             steps {
-                container('kubectl') {
+                container('devops-tools') {
                     script {
                         sh '''
                           set -e
-                          echo "Starting Helm deployment..."
-                          helm upgrade --install hextris ./helm-chart --namespace hextris --create-namespace || {
-                              echo "❌ Helm failed: likely due to missing RBAC permissions on secrets in namespace 'hextris'."
-                              exit 1
-                          }
+                          echo "Starting Terraform deployment..."
+                          
+                          # 1. Initialize Terraform
+                          cd terraform
+                          terraform init
+                          
+                          # 2. Plan and Apply deployment (passing image details)
+                          terraform apply -auto-approve \
+                            -var="docker_image_repo=${IMAGE_REPO}" \
+                            -var="docker_image_tag=${IMAGE_TAG}"
                         '''
                     }
+                }
+            }
+        }
+        
+        stage('Verification') {
+            steps {
+                container('devops-tools') {
+                    // Wait for the deployment to roll out successfully
+                    sh 'kubectl rollout status deployment/hextris -n hextris --timeout=300s'
+                    sh 'kubectl get pods -n hextris'
+                    sh 'kubectl get ingress hextris -n hextris'
                 }
             }
         }
