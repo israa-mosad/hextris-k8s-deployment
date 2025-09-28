@@ -1,6 +1,5 @@
 podTemplate(
   label: 'hextris-agent',
-  serviceAccount: 'jenkins-sa',
   containers: [
     containerTemplate(
       name: 'kubectl',
