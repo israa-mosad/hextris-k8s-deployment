@@ -1,36 +1,22 @@
-podTemplate(
-  label: 'hextris-agent',
-  containers: [
-    containerTemplate(
-      name: 'kubectl',
-      image: 'israa2000/jenkins-agent-kubectl-helm:latest',
-      command: 'cat',
-      ttyEnabled: true
-    )
-  ]
-) {
-  node('hextris-agent') {
-
-    stage('Checkout') {
-      checkout scm
+pipeline {
+    agent {
+        kubernetes {
+            yamlFile 'jenkins/agent.yaml'
+            defaultContainer 'kubectl'
+        }
     }
-
-    stage('Bootstrap RBAC') {
-      container('kubectl') {
-        sh '''
-          kubectl apply -f k8s/rbac.yaml || true
-        '''
-      }
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/israa-mosad/hextris-k8s-deployment'
+            }
+        }
+        stage('Deploy with Helm') {
+            steps {
+                container('kubectl') {
+                    sh 'helm upgrade --install hextris ./helm-chart --namespace hextris --create-namespace'
+                }
+            }
+        }
     }
-
-    stage('Deploy with Helm') {
-      container('kubectl') {
-        sh '''
-          helm upgrade --install hextris ./helm-chart \
-            --namespace hextris --create-namespace
-        '''
-      }
-    }
-
-  }
 }
