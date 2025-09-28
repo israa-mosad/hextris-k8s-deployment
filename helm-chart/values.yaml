@@ -1,7 +1,7 @@
 replicaCount: 2
 
 image:
-  repository: israa/hextris
+  repository: israa2000/hextris
   tag: latest
 
 service:
