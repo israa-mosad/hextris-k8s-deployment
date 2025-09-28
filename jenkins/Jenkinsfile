@@ -1,40 +1,27 @@
-stage('Bootstrap RBAC') {
-    container('kubectl') {
-        sh '''
-        cat <<'EOF' | kubectl apply -f -
-        apiVersion: v1
-        kind: ServiceAccount
-        metadata:
-          name: jenkins-deployer
-          namespace: jenkins-assignment
-        ---
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: Role
-        metadata:
-          name: jenkins-deployer-role
-          namespace: hextris
-        rules:
-          - apiGroups: [""]
-            resources: ["secrets", "pods", "services"]
-            verbs: ["get", "list", "create", "update", "delete"]
-          - apiGroups: ["apps"]
-            resources: ["deployments"]
-            verbs: ["get", "list", "create", "update", "delete"]
-        ---
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: RoleBinding
-        metadata:
-          name: jenkins-deployer-rolebinding
-          namespace: hextris
-        subjects:
-          - kind: ServiceAccount
-            name: jenkins-deployer
-            namespace: jenkins-assignment
-        roleRef:
-          kind: Role
-          name: jenkins-deployer-role
-          apiGroup: rbac.authorization.k8s.io
-        EOF
-        '''
+podTemplate(
+    label: 'hextris-agent',
+    containers: [
+        containerTemplate(
+            name: 'kubectl',
+            image: 'israa2000/jenkins-agent-kubectl-helm:latest',
+            command: 'cat',
+            ttyEnabled: true
+        )
+    ],
+    serviceAccount: 'default'
+) {
+    node('hextris-agent') {
+        stage('Checkout') {
+            checkout scm
+        }
+
+        stage('Deploy with Helm') {
+            container('kubectl') {
+                sh '''
+                  helm upgrade --install hextris ./helm-chart \
+                    --namespace hextris --create-namespace
+                '''
+            }
+        }
     }
 }
