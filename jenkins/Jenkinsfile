@@ -1,42 +1,66 @@
-podTemplate(
-  label: 'ci-agent',
-  containers: [
-    containerTemplate(name: 'jnlp', image: 'jenkins/inbound-agent:3327.v868139a_d00e0-5', args: '${computer.jnlpmac} ${computer.name}'),
-    containerTemplate(name: 'kaniko', image: 'gcr.io/kaniko-project/executor:latest', ttyEnabled: true)
-  ],
-  volumes: [ emptyDirVolume(mountPath: '/kaniko/.docker', memory: false) ]
-) {
-  node('ci-agent') {
-    def registry = 'docker.io/israa2000'
-    def imageName = 'hextris'
-    def tag = 'latest'
-
-    stage('Checkout') {
-      checkout scm
-    }
-
-    stage('Build & Push Docker Image') {
-    container('kaniko') {
-        withCredentials([string(credentialsId: 'DOCKER_CONFIG_JSON', variable: 'DOCKER_CONFIG_JSON')]) {
-            sh """
-              mkdir -p /kaniko/.docker
-              echo "\$DOCKER_CONFIG_JSON" > /kaniko/.docker/config.json
-              /kaniko/executor \\
-                --dockerfile=$WORKSPACE/Dockerfile \\
-                --context=dir://$WORKSPACE \\
-                --destination=docker.io/israa2000/hextris:latest \\
-                --cache=true
-            """
+pipeline {
+    agent {
+        kubernetes {
+            label 'kaniko-agent'
+            defaultContainer 'jnlp'
+            yaml """
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    some-label: kaniko-agent
+spec:
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:latest
+    tty: true
+    volumeMounts:
+      - name: kaniko-secret
+        mountPath: /kaniko/.docker
+  volumes:
+  - name: kaniko-secret
+    secret:
+      secretName: docker-config-json
+"""
         }
     }
-}
 
-    stage('Deploy via Terraform') {
-      sh """
-        cd infra/terraform
-        terraform init
-        terraform apply -auto-approve
-      """
+    environment {
+        IMAGE_NAME = "docker.io/israa2000/hextris:latest"
     }
-  }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build & Push Docker Image') {
+            steps {
+                container('kaniko') {
+                    withCredentials([string(credentialsId: 'DOCKER_CONFIG_JSON', variable: 'DOCKER_CONFIG_JSON')]) {
+                        sh """
+                          mkdir -p /kaniko/.docker
+                          echo "\$DOCKER_CONFIG_JSON" > /kaniko/.docker/config.json
+                          /kaniko/executor \\
+                            --dockerfile=$WORKSPACE/Dockerfile \\
+                            --context=dir://$WORKSPACE \\
+                            --destination=${IMAGE_NAME} \\
+                            --cache=true
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh """
+                  terraform init
+                  terraform apply -auto-approve
+                """
+            }
+        }
+    }
 }
