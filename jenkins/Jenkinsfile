@@ -21,7 +21,7 @@ podTemplate(
           sh """
             mkdir -p /kaniko/.docker
             echo "\$DOCKER_CONFIG_JSON" > /kaniko/.docker/config.json
-            /kaniko/executor --context=dir://$WORKSPACE --dockerfile=$WORKSPACE/Dockerfile --destination=${registry}/${imageName}:${tag} --cache=true
+            /kaniko/executor --dockerfile=$WORKSPACE/Dockerfile --context=dir://$WORKSPACE --destination=docker.io/israa2000/hextris:latest --cache=true
           """
         }
       }
