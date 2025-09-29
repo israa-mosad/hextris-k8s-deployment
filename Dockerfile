@@ -14,12 +14,5 @@ RUN curl -LO https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz \
     && mv linux-amd64/helm /usr/local/bin/helm \
     && rm -rf linux-amd64* helm-v3.14.0-linux-amd64.tar.gz
 
-# --- ADD TERRAFORM INSTALLATION ---
-RUN apk add --no-cache unzip \
-    && curl -LO https://releases.hashicorp.com/terraform/1.8.5/terraform_1.8.5_linux_amd64.zip \
-    && unzip terraform_1.8.5_linux_amd64.zip \
-    && mv terraform /usr/local/bin/ \
-    && rm terraform_1.8.5_linux_amd64.zip
-
 # Default command (Jenkins agent requires this)
 CMD ["cat"]
