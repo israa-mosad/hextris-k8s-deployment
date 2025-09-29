@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hextris
+  name: {{ include "hextris.name" . }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: hextris
+      app: {{ include "hextris.name" . }}
   template:
     metadata:
       labels:
-        app: hextris
+        app: {{ include "hextris.name" . }}
     spec:
       containers:
         - name: hextris
-          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           ports:
             - containerPort: 80
           resources:
