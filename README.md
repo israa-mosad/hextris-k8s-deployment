@@ -54,9 +54,22 @@ You’ll need to have these installed locally:
 
 ### Dockerfile
 ```dockerfile
-FROM nginx:alpine
-COPY app/ /usr/share/nginx/html
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN if [ -f package.json ]; then npm ci --silent || true; fi
+COPY . .
+RUN if [ -f package.json ] && grep -q "\"build\"" package.json; then \
+      npm run build --silent; \
+      mkdir -p /app/dist && cp -r ./dist/* /app/dist/ || true; \
+    else \
+      mkdir -p /app/dist && cp -r . /app/dist/ ; \
+    fi
+
+FROM nginx:stable-alpine
+COPY --chown=nginx:nginx --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
 ````
 
 ---
@@ -76,12 +89,15 @@ description: Helm chart for Hextris web app
 
 ```yaml
 replicaCount: 2
+
 image:
-  repository: israa/hextris
+  repository: israa2000/hextris
   tag: latest
+
 service:
   type: ClusterIP
   port: 80
+
 resources:
   requests:
     cpu: "100m"
@@ -89,6 +105,14 @@ resources:
   limits:
     cpu: "250m"
     memory: "256Mi"
+
+ingress:
+  enabled: true
+  hosts:
+    - host: hextris.local
+      paths:
+        - path: /
+          pathType: Prefix    
 ```
 
 #### `helm-chart/templates/deployment.yaml`
@@ -97,20 +121,20 @@ resources:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hextris
+  name: {{ include "hextris.name" . }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: hextris
+      app: {{ include "hextris.name" . }}
   template:
     metadata:
       labels:
-        app: hextris
+        app: {{ include "hextris.name" . }}
     spec:
       containers:
         - name: hextris
-          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           ports:
             - containerPort: 80
           resources:
@@ -128,11 +152,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: hextris
+  name: {{ include "hextris.name" . }}
 spec:
-  selector:
-    app: hextris
   type: {{ .Values.service.type }}
+  selector:
+    app: {{ include "hextris.name" . }}
   ports:
     - port: {{ .Values.service.port }}
       targetPort: 80
@@ -141,22 +165,24 @@ spec:
 #### `helm-chart/templates/ingress.yaml`
 
 ```yaml
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: hextris
+  name: {{ include "hextris.name" . }}
 spec:
   rules:
-    - host: hextris.local
+    - host: {{ .Values.ingress.hosts[0].host }}
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - path: {{ .Values.ingress.hosts[0].paths[0].path }}
+            pathType: {{ .Values.ingress.hosts[0].paths[0].pathType }}
             backend:
               service:
-                name: hextris
+                name: {{ include "hextris.name" . }}
                 port:
-                  number: 80
+                  number: {{ .Values.service.port }}
+{{- end }}
 ```
 
 ---
@@ -169,8 +195,12 @@ spec:
 terraform {
   required_providers {
     kubernetes = {
-      source = "hashicorp/kubernetes"
+      source  = "hashicorp/kubernetes"
       version = "2.27.0"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "2.10.0"
     }
   }
 }
@@ -179,10 +209,35 @@ provider "kubernetes" {
   config_path = "~/.kube/config"
 }
 
+provider "helm" {
+  kubernetes {
+    config_path = "~/.kube/config"
+  }
+}
+
 resource "kubernetes_namespace" "hextris" {
   metadata {
     name = "hextris"
   }
+}
+
+resource "helm_release" "hextris" {
+  name       = "hextris"
+  chart      = "${path.module}/../../chart/hextris"
+  namespace  = kubernetes_namespace.hextris.metadata[0].name
+  values = [
+    yamlencode({
+      replicaCount = 2
+      image = {
+        repository = "docker.io/israa2000/hextris"
+        tag        = "latest"
+      }
+      resources = {
+        requests = { cpu = "100m", memory = "128Mi" }
+        limits   = { cpu = "500m", memory = "256Mi" }
+      }
+    })
+  ]
 }
 ```
 
@@ -196,28 +251,65 @@ resource "kubernetes_namespace" "hextris" {
 pipeline {
     agent {
         kubernetes {
+            label 'kaniko-agent'
+            defaultContainer 'jnlp'
             yaml """
 apiVersion: v1
 kind: Pod
+metadata:
+  labels:
+    some-label: kaniko-agent
 spec:
   containers:
-  - name: kubectl
-    image: bitnami/kubectl:latest
-    command:
-    - cat
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:latest
     tty: true
+    volumeMounts:
+      - name: kaniko-secret
+        mountPath: /kaniko/.docker
+  volumes:
+  - name: kaniko-secret
+    secret:
+      secretName: docker-config-json
 """
         }
     }
+
+    environment {
+        IMAGE_NAME = "docker.io/israa2000/hextris:latest"
+    }
+
     stages {
-        stage('Build Docker Image') {
+        stage('Checkout') {
             steps {
-                sh 'docker build -t israa/hextris:latest .'
+                checkout scm
             }
         }
-        stage('Deploy with Helm') {
+
+        stage('Build & Push Docker Image') {
             steps {
-                sh 'helm upgrade --install hextris ./helm-chart --namespace hextris --create-namespace'
+                container('kaniko') {
+                    withCredentials([string(credentialsId: 'DOCKER_CONFIG_JSON', variable: 'DOCKER_CONFIG_JSON')]) {
+                        sh """
+                          mkdir -p /kaniko/.docker
+                          echo "\$DOCKER_CONFIG_JSON" > /kaniko/.docker/config.json
+                          /kaniko/executor \\
+                            --dockerfile=$WORKSPACE/Dockerfile \\
+                            --context=dir://$WORKSPACE \\
+                            --destination=${IMAGE_NAME} \\
+                            --cache=true
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh """
+                  terraform init
+                  terraform apply -auto-approve
+                """
             }
         }
     }
