@@ -1,36 +1,38 @@
-pipeline {
-    agent {
-        kubernetes {
-            yaml """
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-  - name: kubectl
-    image: israa2000/jenkins-agent-kubectl-helm:latest
-    command:
-    - cat
-    tty: true
-"""
-            defaultContainer 'kubectl'
-        }
+podTemplate(
+  label: 'ci-agent',
+  containers: [
+    containerTemplate(name: 'jnlp', image: 'jenkins/inbound-agent:3327.v868139a_d00e0-5', args: '${computer.jnlpmac} ${computer.name}'),
+    containerTemplate(name: 'kaniko', image: 'gcr.io/kaniko-project/executor:latest', command: 'cat', ttyEnabled: true)
+  ],
+  volumes: [ emptyDirVolume(mountPath: '/kaniko/.docker', memory: false) ]
+) {
+  node('ci-agent') {
+    def registry = 'docker.io/israa2000'
+    def imageName = 'hextris'
+    def tag = 'latest'
+
+    stage('Checkout') {
+      checkout scm
     }
-    stages {
-        stage('Deploy with Helm') {
-            steps {
-                container('kubectl') {
-                    script {
-                        sh '''
-                          set -e
-                          echo "Starting Helm deployment..."
-                          helm upgrade --install hextris ./helm-chart --namespace hextris --create-namespace || {
-                              echo "❌ Helm failed: likely due to missing RBAC permissions on secrets in namespace 'hextris'."
-                              exit 1
-                          }
-                        '''
-                    }
-                }
-            }
+
+    stage('Build & Push image') {
+      container('kaniko') {
+        withCredentials([string(credentialsId: 'DOCKER_CONFIG_JSON', variable: 'DOCKER_CONFIG_JSON')]) {
+          sh """
+            mkdir -p /kaniko/.docker
+            echo "\$DOCKER_CONFIG_JSON" > /kaniko/.docker/config.json
+            /kaniko/executor --context=dir://$WORKSPACE --dockerfile=$WORKSPACE/Dockerfile --destination=${registry}/${imageName}:${tag} --cache=true
+          """
         }
+      }
     }
+
+    stage('Deploy via Terraform') {
+      sh """
+        cd infra/terraform
+        terraform init
+        terraform apply -auto-approve
+      """
+    }
+  }
 }
