@@ -15,17 +15,21 @@ podTemplate(
       checkout scm
     }
 
-    stage('Build & Push image') {
-      container('kaniko') {
+    stage('Build & Push Docker Image') {
+    container('kaniko') {
         withCredentials([string(credentialsId: 'DOCKER_CONFIG_JSON', variable: 'DOCKER_CONFIG_JSON')]) {
-          sh """
-            mkdir -p /kaniko/.docker
-            echo "\$DOCKER_CONFIG_JSON" > /kaniko/.docker/config.json
-            /kaniko/executor --dockerfile=$WORKSPACE/Dockerfile --context=dir://$WORKSPACE --destination=docker.io/israa2000/hextris:latest --cache=true
-          """
+            sh """
+              mkdir -p /kaniko/.docker
+              echo "\$DOCKER_CONFIG_JSON" > /kaniko/.docker/config.json
+              /kaniko/executor \\
+                --dockerfile=$WORKSPACE/Dockerfile \\
+                --context=dir://$WORKSPACE \\
+                --destination=docker.io/israa2000/hextris:latest \\
+                --cache=true
+            """
         }
-      }
     }
+}
 
     stage('Deploy via Terraform') {
       sh """
