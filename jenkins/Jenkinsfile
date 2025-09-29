@@ -2,7 +2,7 @@ podTemplate(
   label: 'ci-agent',
   containers: [
     containerTemplate(name: 'jnlp', image: 'jenkins/inbound-agent:3327.v868139a_d00e0-5', args: '${computer.jnlpmac} ${computer.name}'),
-    containerTemplate(name: 'kaniko', image: 'gcr.io/kaniko-project/executor:latest', command: 'cat', ttyEnabled: true)
+    containerTemplate(name: 'kaniko', image: 'gcr.io/kaniko-project/executor:latest', ttyEnabled: true)
   ],
   volumes: [ emptyDirVolume(mountPath: '/kaniko/.docker', memory: false) ]
 ) {
