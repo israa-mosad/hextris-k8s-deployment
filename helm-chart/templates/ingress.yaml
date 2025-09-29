@@ -1,16 +1,18 @@
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: hextris
+  name: {{ include "hextris.name" . }}
 spec:
   rules:
-    - host: hextris.local
+    - host: {{ .Values.ingress.hosts[0].host }}
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - path: {{ .Values.ingress.hosts[0].paths[0].path }}
+            pathType: {{ .Values.ingress.hosts[0].paths[0].pathType }}
             backend:
               service:
-                name: hextris
+                name: {{ include "hextris.name" . }}
                 port:
-                  number: 80
+                  number: {{ .Values.service.port }}
+{{- end }}
