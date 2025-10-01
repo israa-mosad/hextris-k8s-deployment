@@ -1,46 +1,44 @@
 pipeline {
     agent {
         kubernetes {
-            label 'kaniko-agent'
+            label 'hextris-pipeline'
             defaultContainer 'jnlp'
             yaml """
 apiVersion: v1
 kind: Pod
-metadata:
-  labels:
-    some-label: kaniko-agent
 spec:
   containers:
   - name: kaniko
     image: gcr.io/kaniko-project/executor:debug
-    tty: true
     command:
-      - /busybox/sh
-      - -c
-    args:
-      - cat
-    volumeMounts:
-      - name: workspace-volume
-        mountPath: /home/jenkins/agent
-  - name: jnlp
-    image: jenkins/inbound-agent:latest
+    - cat
     tty: true
     volumeMounts:
-      - name: workspace-volume
-        mountPath: /home/jenkins/agent
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
+  - name: terraform
+    image: hashicorp/terraform:1.6.7
+    command:
+    - cat
+    tty: true
+    volumeMounts:
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
   volumes:
-    - name: workspace-volume
-      emptyDir: {}
+  - name: workspace-volume
+    emptyDir: {}
 """
         }
     }
 
     environment {
-        IMAGE_NAME = "docker.io/israa2000/hextris:latest"
+        DOCKER_IMAGE = "docker.io/israa2000/hextris:latest"
+        KUBE_NAMESPACE = "jenkins-assignment"
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Code') {
             steps {
                 checkout scm
             }
@@ -49,16 +47,16 @@ spec:
         stage('Build & Push Docker Image') {
             steps {
                 container('kaniko') {
-                    withCredentials([string(credentialsId: 'DOCKER_CONFIG_JSON', variable: 'DOCKER_CONFIG_JSON')]) {
-                        sh """
-                          mkdir -p /kaniko/.docker
-                          echo "\$DOCKER_CONFIG_JSON" > /kaniko/.docker/config.json
-                          /kaniko/executor \\
-                            --dockerfile=$WORKSPACE/Dockerfile \\
-                            --context=dir://$WORKSPACE \\
-                            --destination=${IMAGE_NAME} \\
+                    withCredentials([string(credentialsId: 'docker-config-json', variable: 'DOCKER_CONFIG_JSON')]) {
+                        sh '''
+                        mkdir -p /kaniko/.docker
+                        echo $DOCKER_CONFIG_JSON > /kaniko/.docker/config.json
+                        /kaniko/executor \
+                            --dockerfile=$WORKSPACE/Dockerfile \
+                            --context=dir://$WORKSPACE \
+                            --destination=$DOCKER_IMAGE \
                             --cache=true
-                        """
+                        '''
                     }
                 }
             }
@@ -66,13 +64,30 @@ spec:
 
         stage('Deploy to Kubernetes') {
             steps {
-                container('jnlp') {
-                    sh """
-                      terraform init
-                      terraform apply -auto-approve
-                    """
+                container('terraform') {
+                    sh '''
+                    # Initialize Terraform
+                    terraform init
+
+                    # Apply Kubernetes configuration
+                    terraform apply -auto-approve
+
+                    # Deploy Helm chart
+                    helm upgrade --install hextris ./helm/hextris \
+                        --namespace $KUBE_NAMESPACE
+                    '''
                 }
             }
+        }
+
+    }
+
+    post {
+        success {
+            echo "Pipeline completed successfully!"
+        }
+        failure {
+            echo "Pipeline failed."
         }
     }
 }
