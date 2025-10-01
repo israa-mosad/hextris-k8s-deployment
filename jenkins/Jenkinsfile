@@ -89,10 +89,12 @@ EOF
         stage('Deploy to Kubernetes') {
             steps {
                 container('terraform') {
-                    sh """
-                    terraform init
-                    terraform apply -auto-approve
-                    """
+                    dir('terraform') {   // <-- run inside terraform folder
+                        sh """
+                        terraform init
+                        terraform apply -auto-approve
+                        """
+                    }
                 }
             }
         }
