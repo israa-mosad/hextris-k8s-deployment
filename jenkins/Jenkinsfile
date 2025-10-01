@@ -89,8 +89,45 @@ EOF
         stage('Deploy to Kubernetes') {
             steps {
                 container('terraform') {
-                    dir('terraform') {   // <-- run inside terraform folder
+                    dir('terraform') {
                         sh """
+                        # --- 1. Define RBAC Role (using a heredoc) ---
+                        cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hextris-helm-manager
+  namespace: jenkins-assignment
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "pods", "services", "configmaps", "events"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+EOF
+
+                        # --- 2. Define and Apply RoleBinding (using a heredoc) ---
+                        cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hextris-helm-binding
+  namespace: jenkins-assignment
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hextris-helm-manager
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: jenkins-assignment
+EOF
+
+                        # --- 3. Run Terraform Deployment ---
                         terraform init
                         terraform apply -auto-approve
                         """
