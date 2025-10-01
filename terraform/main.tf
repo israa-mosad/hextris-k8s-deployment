@@ -12,14 +12,16 @@ terraform {
 }
 
 provider "kubernetes" {
-  config_path = "~/.kube/config"
+  # Use in-cluster config automatically
+  config_path = ""
 }
 
 provider "helm" {
   kubernetes {
-    config_path = "~/.kube/config"
+    config_path = ""
   }
 }
+
 
 resource "kubernetes_namespace" "hextris" {
   metadata {
