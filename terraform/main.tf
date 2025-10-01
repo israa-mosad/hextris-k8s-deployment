@@ -12,7 +12,7 @@ terraform {
 }
 
 provider "kubernetes" {
-  # Use in-cluster config automatically
+  # Use in-cluster config
   config_path = ""
 }
 
@@ -22,17 +22,15 @@ provider "helm" {
   }
 }
 
-
-resource "kubernetes_namespace" "hextris" {
-  metadata {
-    name = "hextris"
-  }
+# Use the existing namespace provided by the cloud
+locals {
+  namespace = "jenkins-assignment"
 }
 
 resource "helm_release" "hextris" {
   name       = "hextris"
-  chart      = "${path.module}/../../chart/hextris"
-  namespace  = kubernetes_namespace.hextris.metadata[0].name
+  chart      = "${path.module}/../helm-chart"  # path to your chart
+  namespace  = local.namespace
   values = [
     yamlencode({
       replicaCount = 2
@@ -46,4 +44,5 @@ resource "helm_release" "hextris" {
       }
     })
   ]
+  wait = true
 }
