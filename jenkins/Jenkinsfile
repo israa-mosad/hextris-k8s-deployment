@@ -1,14 +1,10 @@
 pipeline {
     agent {
         kubernetes {
-            label 'hextris-pipeline'
-            defaultContainer 'jnlp'
+            inheritFrom 'default' // or your base pod template
             yaml """
 apiVersion: v1
 kind: Pod
-metadata:
-  labels:
-    some-label: hextris-pipeline
 spec:
   containers:
   - name: kaniko
@@ -17,25 +13,31 @@ spec:
     - cat
     tty: true
     volumeMounts:
-    - mountPath: /home/jenkins/agent
-      name: workspace-volume
+    - name: workspace-volume
+      mountPath: /home/jenkins/agent
   - name: terraform
     image: hashicorp/terraform:1.6.0
     command:
     - cat
     tty: true
     volumeMounts:
-    - mountPath: /home/jenkins/agent
-      name: workspace-volume
+    - name: workspace-volume
+      mountPath: /home/jenkins/agent
   - name: jnlp
     image: jenkins/inbound-agent:latest
     env:
+    - name: JENKINS_SECRET
+      value: "\${JENKINS_SECRET}"
+    - name: JENKINS_TUNNEL
+      value: "\${JENKINS_TUNNEL}"
+    - name: JENKINS_AGENT_NAME
+      value: "\${JENKINS_AGENT_NAME}"
     - name: JENKINS_AGENT_WORKDIR
       value: /home/jenkins/agent
     tty: true
     volumeMounts:
-    - mountPath: /home/jenkins/agent
-      name: workspace-volume
+    - name: workspace-volume
+      mountPath: /home/jenkins/agent
   volumes:
   - name: workspace-volume
     emptyDir: {}
@@ -44,8 +46,8 @@ spec:
     }
 
     environment {
-        DOCKER_IMAGE = "israa2000/hextris:latest"
-        DOCKER_REGISTRY = "docker.io"
+        DOCKER_IMAGE = 'docker.io/israa2000/hextris:latest'
+        DOCKER_CRED_ID = 'docker-hub' // Jenkins credential ID (username/password)
     }
 
     stages {
@@ -58,18 +60,27 @@ spec:
         stage('Build & Push Docker Image') {
             steps {
                 container('kaniko') {
-                    withCredentials([usernamePassword(credentialsId: 'docker-config-json', 
-                                                     usernameVariable: 'DOCKER_USER', 
+                    withCredentials([usernamePassword(credentialsId: env.DOCKER_CRED_ID,
+                                                     usernameVariable: 'DOCKER_USER',
                                                      passwordVariable: 'DOCKER_PASS')]) {
-                        sh '''
+                        sh """
                         mkdir -p /kaniko/.docker
-                        echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"username\":\"$DOCKER_USER\",\"password\":\"$DOCKER_PASS\"}}}" > /kaniko/.docker/config.json
+                        cat > /kaniko/.docker/config.json <<EOF
+{
+  "auths": {
+    "https://index.docker.io/v1/": {
+      "username": "${DOCKER_USER}",
+      "password": "${DOCKER_PASS}"
+    }
+  }
+}
+EOF
                         /kaniko/executor \
-                          --dockerfile=$WORKSPACE/Dockerfile \
-                          --context=dir://$WORKSPACE \
-                          --destination=$DOCKER_REGISTRY/$DOCKER_IMAGE \
+                          --dockerfile=\$WORKSPACE/Dockerfile \
+                          --context=dir://\$WORKSPACE \
+                          --destination=${DOCKER_IMAGE} \
                           --cache=true
-                        '''
+                        """
                     }
                 }
             }
@@ -78,24 +89,21 @@ spec:
         stage('Deploy to Kubernetes') {
             steps {
                 container('terraform') {
-                    sh '''
+                    sh """
                     terraform init
                     terraform apply -auto-approve
-                    '''
+                    """
                 }
             }
         }
     }
 
     post {
-        always {
-            echo "Pipeline finished. Check above logs for details."
-        }
         success {
-            echo "Pipeline succeeded!"
+            echo "Pipeline completed successfully!"
         }
         failure {
-            echo "Pipeline failed!"
+            echo "Pipeline failed. Check logs for details."
         }
     }
 }
