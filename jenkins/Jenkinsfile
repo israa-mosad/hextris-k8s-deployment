@@ -12,15 +12,25 @@ metadata:
 spec:
   containers:
   - name: kaniko
-    image: gcr.io/kaniko-project/executor:latest
+    image: gcr.io/kaniko-project/executor:debug
+    tty: true
+    command:
+      - /busybox/sh
+      - -c
+    args:
+      - cat
+    volumeMounts:
+      - name: workspace-volume
+        mountPath: /home/jenkins/agent
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
     tty: true
     volumeMounts:
-      - name: kaniko-secret
-        mountPath: /kaniko/.docker
+      - name: workspace-volume
+        mountPath: /home/jenkins/agent
   volumes:
-  - name: kaniko-secret
-    secret:
-      secretName: docker-config-json
+    - name: workspace-volume
+      emptyDir: {}
 """
         }
     }
@@ -56,10 +66,12 @@ spec:
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh """
-                  terraform init
-                  terraform apply -auto-approve
-                """
+                container('jnlp') {
+                    sh """
+                      terraform init
+                      terraform apply -auto-approve
+                    """
+                }
             }
         }
     }
