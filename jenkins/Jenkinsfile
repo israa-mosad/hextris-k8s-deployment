@@ -16,7 +16,7 @@ spec:
     - name: workspace-volume
       mountPath: /home/jenkins/agent
   - name: terraform
-    image: hashicorp/terraform:1.6.0
+    image: cloudops/terraform-kubectl:latest // 🚨 FIX: Changed image to include kubectl
     command:
     - cat
     tty: true
@@ -34,6 +34,7 @@ spec:
       value: "\${JENKINS_AGENT_NAME}"
     - name: JENKINS_AGENT_WORKDIR
       value: /home/jenkins/agent
+    
     tty: true
     volumeMounts:
     - name: workspace-volume
@@ -60,15 +61,18 @@ spec:
         stage('Build & Push Docker Image') {
             steps {
                 container('kaniko') {
+                 
                     withCredentials([usernamePassword(credentialsId: env.DOCKER_CRED_ID,
                                                      usernameVariable: 'DOCKER_USER',
-                                                     passwordVariable: 'DOCKER_PASS')]) {
+                                          
+                        passwordVariable: 'DOCKER_PASS')]) {
                         sh """
                         mkdir -p /kaniko/.docker
                         cat > /kaniko/.docker/config.json <<EOF
 {
   "auths": {
     "https://index.docker.io/v1/": {
+ 
       "username": "${DOCKER_USER}",
       "password": "${DOCKER_PASS}"
     }
@@ -78,10 +82,12 @@ EOF
                         /kaniko/executor \
                           --dockerfile=\$WORKSPACE/Dockerfile \
                           --context=dir://\$WORKSPACE \
-                          --destination=${DOCKER_IMAGE} \
+  
+                         --destination=${DOCKER_IMAGE} \
                           --cache=true
                         """
                     }
+     
                 }
             }
         }
@@ -89,10 +95,11 @@ EOF
         stage('Deploy to Kubernetes') {
             steps {
                 container('terraform') {
-                    dir('terraform') {
+                    dir('terraform') {   // <-- run inside terraform folder
                         sh """
                         # --- 1. Define RBAC Role (using a heredoc) ---
-                        cat <<EOF | kubectl apply -f -
+                        # This fixes the 'secrets is forbidden' error by creating required permissions.
+                        cat <<EOF_ROLE | kubectl apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -108,10 +115,10 @@ rules:
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-EOF
+EOF_ROLE
 
                         # --- 2. Define and Apply RoleBinding (using a heredoc) ---
-                        cat <<EOF | kubectl apply -f -
+                        cat <<EOF_BINDING | kubectl apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -125,7 +132,7 @@ subjects:
 - kind: ServiceAccount
   name: default
   namespace: jenkins-assignment
-EOF
+EOF_BINDING
 
                         # --- 3. Run Terraform Deployment ---
                         terraform init
@@ -139,10 +146,10 @@ EOF
 
     post {
         success {
-            echo "Pipeline completed successfully!"
+            echo "Pipeline completed successfully!" [cite: 12]
         }
         failure {
-            echo "Pipeline failed. Check logs for details."
+            echo "Pipeline failed. Check logs for details." [cite: 13]
         }
     }
 }
