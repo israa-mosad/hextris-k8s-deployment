@@ -17,7 +17,7 @@ spec:
     - mountPath: /home/jenkins/agent
       name: workspace-volume
   - name: terraform
-    image: hashicorp/terraform:1.6.7
+    image: hashicorp/terraform:1.6.0   # Fixed image
     command:
     - cat
     tty: true
@@ -32,13 +32,13 @@ spec:
     }
 
     environment {
-        DOCKER_IMAGE = "docker.io/israa2000/hextris:latest"
-        KUBE_NAMESPACE = "jenkins-assignment"
+        DOCKER_REGISTRY = 'docker.io'
+        DOCKER_IMAGE = 'israa2000/hextris:latest'
+        KUBE_NAMESPACE = 'jenkins-assignment'
     }
 
     stages {
-
-        stage('Checkout Code') {
+        stage('Checkout SCM') {
             steps {
                 checkout scm
             }
@@ -48,15 +48,15 @@ spec:
             steps {
                 container('kaniko') {
                     withCredentials([string(credentialsId: 'docker-config-json', variable: 'DOCKER_CONFIG_JSON')]) {
-                        sh '''
+                        sh """
                         mkdir -p /kaniko/.docker
-                        echo $DOCKER_CONFIG_JSON > /kaniko/.docker/config.json
-                        /kaniko/executor \
-                            --dockerfile=$WORKSPACE/Dockerfile \
-                            --context=dir://$WORKSPACE \
-                            --destination=$DOCKER_IMAGE \
-                            --cache=true
-                        '''
+                        echo \$DOCKER_CONFIG_JSON > /kaniko/.docker/config.json
+                        /kaniko/executor \\
+                          --dockerfile=\$WORKSPACE/Dockerfile \\
+                          --context=dir://\$WORKSPACE \\
+                          --destination=$DOCKER_REGISTRY/$DOCKER_IMAGE \\
+                          --cache=true
+                        """
                     }
                 }
             }
@@ -65,29 +65,22 @@ spec:
         stage('Deploy to Kubernetes') {
             steps {
                 container('terraform') {
-                    sh '''
-                    # Initialize Terraform
+                    sh """
+                    cd terraform   # Change to your Terraform folder if needed
                     terraform init
-
-                    # Apply Kubernetes configuration
                     terraform apply -auto-approve
-
-                    # Deploy Helm chart
-                    helm upgrade --install hextris ./helm/hextris \
-                        --namespace $KUBE_NAMESPACE
-                    '''
+                    """
                 }
             }
         }
-
     }
 
     post {
         success {
-            echo "Pipeline completed successfully!"
+            echo 'Pipeline completed successfully!'
         }
         failure {
-            echo "Pipeline failed."
+            echo 'Pipeline failed. Check logs for details.'
         }
     }
 }
