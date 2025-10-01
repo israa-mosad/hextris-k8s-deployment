@@ -35,7 +35,7 @@ spec:
     stage('Build & Push Docker') {
       steps {
         container('kaniko') {
-          sh '/kaniko/executor --dockerfile=Dockerfile --context=dir://. --destination=docker.io/israa2000/hextris:latest --cache=true'
+          sh '/kaniko/executor --dockerfile=Dockerfile --context=dir://. --destination=docker.io/<your-docker-id>/hextris:latest --cache=true'
         }
       }
     }
