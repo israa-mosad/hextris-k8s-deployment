@@ -96,6 +96,50 @@ EOF
 
         stage('Deploy to Kubernetes') {
             steps {
+                // STEP 1: Apply RBAC Permissions (Requires kubectl in the 'helm' container)
+                container('helm') {
+                    sh """
+                        echo "Applying RBAC permissions for ServiceAccount: jenkins-assignment/default..."
+                        
+                        # --- 1. Create the Role (hextris-helm-manager) ---
+                        cat <<EOF_ROLE | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hextris-helm-manager
+  namespace: jenkins-assignment
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "pods", "services", "configmaps", "events"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+EOF_ROLE
+
+                        # --- 2. Create the RoleBinding (hextris-helm-binding) ---
+                        cat <<EOF_BINDING | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hextris-helm-binding
+  namespace: jenkins-assignment
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hextris-helm-manager
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: jenkins-assignment
+EOF_BINDING
+                    """
+                }
+                
+                // STEP 2: Run Helm Deployment (Now with required permissions)
                 container('helm') {
                     sh '''
                     helm upgrade --install hextris ./helm-chart \
