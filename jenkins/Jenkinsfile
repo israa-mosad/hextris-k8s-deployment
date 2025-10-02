@@ -96,23 +96,15 @@ EOF
 
         stage('Deploy to Kubernetes') {
             steps {
-                container('terraform') {
-                    dir('terraform') {
-                        sh """
-                        terraform init
-                        terraform apply -auto-approve
-                        """
-                    }
-                }
-
                 container('helm') {
-                    sh """
-                    # Helm chart assumed inside repo at ./helm-chart
-                    helm template hextris ./helm-chart > k8s-manifests.yaml
-
-                    # Apply to Kubernetes cluster
-                    kubectl apply -f k8s-manifests.yaml
-                    """
+                    sh '''
+                    helm upgrade --install hextris ./helm-chart \
+                      --namespace jenkins-assignment \
+                      --set image.repository=docker.io/israa2000/hextris \
+                      --set image.tag=latest \
+                      --set replicaCount=2 \
+                      --wait
+                    '''
                 }
             }
         }
