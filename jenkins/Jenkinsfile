@@ -1,7 +1,7 @@
 pipeline {
     agent {
         kubernetes {
-            inheritFrom 'default' // or your base pod template
+            inheritFrom 'default' // your base pod template
             yaml """
 apiVersion: v1
 kind: Pod
@@ -47,7 +47,7 @@ spec:
 
     environment {
         DOCKER_IMAGE = 'docker.io/israa2000/hextris:latest'
-        DOCKER_CRED_ID = 'docker-hub' // Jenkins credential ID (username/password)
+        DOCKER_CRED_ID = 'docker-hub' // Jenkins credential ID
     }
 
     stages {
@@ -89,10 +89,12 @@ EOF
         stage('Deploy to Kubernetes') {
             steps {
                 container('terraform') {
-                    dir('terraform') {   // <-- run inside terraform folder
+                    dir('terraform') { // run inside terraform folder
                         sh """
-                        terraform init
-                        terraform apply -auto-approve
+                        # Render Helm chart locally without needing cluster secrets
+                        helm template hextris ./../helm-chart > k8s-manifests.yaml
+                        # Apply manifests to Kubernetes
+                        kubectl apply -f k8s-manifests.yaml
                         """
                     }
                 }
