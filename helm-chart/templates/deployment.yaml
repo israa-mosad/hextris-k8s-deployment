@@ -1,16 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "hextris.name" . }}
+  name: {{ .Release.Name }}-hextris
+  labels:
+    app: hextris
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: hextris
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ include "hextris.name" . }}
+      app: hextris
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app: {{ include "hextris.name" . }}
+        app: hextris
+        app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       containers:
         - name: hextris
