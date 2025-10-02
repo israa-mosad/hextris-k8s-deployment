@@ -31,13 +31,23 @@ spec:
     volumeMounts:
     - name: workspace-volume
       mountPath: /home/jenkins/agent
+  // FIX: Added dedicated kubectl container to run RBAC setup
+  - name: kubectl-tool
+    image: bitnami/kubectl:latest
+    command:
+    - cat
+    tty: true
+    volumeMounts:
+    - name: workspace-volume
+      mountPath: /home/jenkins/agent
+  // END FIX
   - name: jnlp
     image: jenkins/inbound-agent:latest
     env:
     - name: JENKINS_SECRET
       value: "\${JENKINS_SECRET}"
     - name: JENKINS_TUNNEL
-      value: "\${JENKINS_TUNNEL}"
+      value: "jenkins-assignment1-agent.jenkins-assignment.svc.cluster.local:50000"
     - name: JENKINS_AGENT_NAME
       value: "\${JENKINS_AGENT_NAME}"
     - name: JENKINS_AGENT_WORKDIR
@@ -96,8 +106,9 @@ EOF
 
         stage('Deploy to Kubernetes') {
             steps {
-                // STEP 1: Apply RBAC Permissions (Requires kubectl in the 'helm' container)
-                container('helm') {
+                // STEP 1: Apply RBAC Permissions (Using the dedicated kubectl container)
+                // This resolves the "secrets is forbidden" error.
+                container('kubectl-tool') {
                     sh """
                         echo "Applying RBAC permissions for ServiceAccount: jenkins-assignment/default..."
                         
