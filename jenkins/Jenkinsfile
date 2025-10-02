@@ -1,7 +1,7 @@
 pipeline {
     agent {
         kubernetes {
-            inheritFrom 'default' // or your base pod template
+            inheritFrom 'default' // your base pod template
             yaml """
 apiVersion: v1
 kind: Pod
@@ -96,12 +96,21 @@ EOF
 
         stage('Deploy to Kubernetes') {
             steps {
+                container('terraform') {
+                    dir('terraform') {
+                        sh """
+                        terraform init
+                        terraform apply -auto-approve
+                        """
+                    }
+                }
+
                 container('helm') {
                     sh """
-                    # Generate Kubernetes manifests from Helm chart
-                    helm template hextris ./../helm-chart > k8s-manifests.yaml
+                    # Helm chart assumed inside repo at ./helm-chart
+                    helm template hextris ./helm-chart > k8s-manifests.yaml
 
-                    # Apply manifests to the cluster
+                    # Apply to Kubernetes cluster
                     kubectl apply -f k8s-manifests.yaml
                     """
                 }
