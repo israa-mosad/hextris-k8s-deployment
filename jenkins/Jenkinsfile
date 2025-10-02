@@ -1,7 +1,7 @@
 pipeline {
     agent {
         kubernetes {
-            inheritFrom 'default' // your base pod template
+            inheritFrom 'default' // or your base pod template
             yaml """
 apiVersion: v1
 kind: Pod
@@ -23,31 +23,13 @@ spec:
     volumeMounts:
     - name: workspace-volume
       mountPath: /home/jenkins/agent
-  - name: helm
-    image: alpine/helm:3.12.0
-    command:
-    - cat
-    tty: true
-    volumeMounts:
-    - name: workspace-volume
-      mountPath: /home/jenkins/agent
-  // FIX: Added dedicated kubectl container to run RBAC setup
-  - name: kubectl-tool
-    image: bitnami/kubectl:latest
-    command:
-    - cat
-    tty: true
-    volumeMounts:
-    - name: workspace-volume
-      mountPath: /home/jenkins/agent
-  // END FIX
   - name: jnlp
     image: jenkins/inbound-agent:latest
     env:
     - name: JENKINS_SECRET
       value: "\${JENKINS_SECRET}"
     - name: JENKINS_TUNNEL
-      value: "jenkins-assignment1-agent.jenkins-assignment.svc.cluster.local:50000"
+      value: "\${JENKINS_TUNNEL}"
     - name: JENKINS_AGENT_NAME
       value: "\${JENKINS_AGENT_NAME}"
     - name: JENKINS_AGENT_WORKDIR
@@ -106,60 +88,13 @@ EOF
 
         stage('Deploy to Kubernetes') {
             steps {
-                // STEP 1: Apply RBAC Permissions (Using the dedicated kubectl container)
-                // This resolves the "secrets is forbidden" error.
-                container('kubectl-tool') {
-                    sh """
-                        echo "Applying RBAC permissions for ServiceAccount: jenkins-assignment/default..."
-                        
-                        # --- 1. Create the Role (hextris-helm-manager) ---
-                        cat <<EOF_ROLE | kubectl apply -f -
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: hextris-helm-manager
-  namespace: jenkins-assignment
-rules:
-- apiGroups: [""]
-  resources: ["secrets", "pods", "services", "configmaps", "events"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["apps"]
-  resources: ["deployments"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["ingresses"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-EOF_ROLE
-
-                        # --- 2. Create the RoleBinding (hextris-helm-binding) ---
-                        cat <<EOF_BINDING | kubectl apply -f -
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: hextris-helm-binding
-  namespace: jenkins-assignment
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: hextris-helm-manager
-subjects:
-- kind: ServiceAccount
-  name: default
-  namespace: jenkins-assignment
-EOF_BINDING
-                    """
-                }
-                
-                // STEP 2: Run Helm Deployment (Now with required permissions)
-                container('helm') {
-                    sh '''
-                    helm upgrade --install hextris ./helm-chart \
-                      --namespace jenkins-assignment \
-                      --set image.repository=docker.io/israa2000/hextris \
-                      --set image.tag=latest \
-                      --set replicaCount=2 \
-                      --wait
-                    '''
+                container('terraform') {
+                    dir('terraform') {   // <-- run inside terraform folder
+                        sh """
+                        terraform init
+                        terraform apply -auto-approve
+                        """
+                    }
                 }
             }
         }
